@@ -13,5 +13,4 @@ ChunkSubdivisions = 10
 
 [node name="Player" parent="." instance=ExtResource( 2 )]
 transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0 )
-
-[connection signal="EmitPosition" from="Player" to="TerrainGenerator" method="OnPlayerEmitPosition"]
+TerrainGeneratorPath = NodePath("../TerrainGenerator")

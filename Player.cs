@@ -2,6 +2,9 @@ using Godot;
 
 public class Player : KinematicBody
 {
+
+  [Export]
+  public NodePath TerrainGeneratorPath;
   [Signal]
   public delegate Vector3 EmitPosition();
   public float SensitivityX = 0.005f;
@@ -23,6 +26,13 @@ public class Player : KinematicBody
     Input.SetMouseMode(Input.MouseMode.Captured);
     ForwardVelocity = WalkSpeed;
     SetProcess(true);
+    var tg = GetNode<TerrainGenerator>(TerrainGeneratorPath);
+
+    if (tg != null)
+    {
+      Connect(nameof(EmitPosition), tg, nameof(tg.OnPlayerEmitPosition));
+    }
+
   }
 
   public override void _Process(float delta)
