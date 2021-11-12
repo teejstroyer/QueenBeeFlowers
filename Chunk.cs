@@ -3,17 +3,23 @@ using Godot;
 public class Chunk : Spatial
 {
   public bool ShouldRemove = false;
-  private int _Size;
-  private int _Subdivisions;
-  private OpenSimplexNoise _Noise;
-  private int _MaxHeight;
-  public Chunk(OpenSimplexNoise noise, Vector3 position, int maxHeight, int chunkSize, int subdivisions)
+  private readonly int _Size;
+  private readonly int _Subdivisions;
+  private readonly OpenSimplexNoise _Noise;
+  private readonly int _MaxHeight;
+  private readonly Material _Material;
+  private readonly Mesh _GrassMesh;
+
+
+  public Chunk(OpenSimplexNoise noise, Vector3 position, int maxHeight, int chunkSize, int subdivisions, Material material, Mesh grassMesh)
   {
     this.Translation = position;
     _Noise = noise;
     _Size = chunkSize;
     _Subdivisions = subdivisions;
     _MaxHeight = maxHeight;
+    _Material = material;
+    _GrassMesh = grassMesh;
   }
 
   public override void _Ready()
@@ -51,18 +57,18 @@ public class Chunk : Spatial
 
     var meshInstance = new MeshInstance()
     {
-      Mesh = surfaceTool.Commit(),
+      Mesh = surfaceTool.Commit()
     };
 
-    //To be replaced with shader 3d grass material.
-    var material = new SpatialMaterial()
-    {
-      FlagsTransparent = false,
-      AlbedoColor = new Color(0.2f, .8f, .2f),
-    };
-
-    meshInstance.SetSurfaceMaterial(0, material);
+    meshInstance.SetSurfaceMaterial(0, _Material);
     meshInstance.CreateTrimeshCollision();
     AddChild(meshInstance);
+
+    //Next Need to take multimesh and for each item in mesh align to ground of chunk
+    var mm = new MultiMesh
+    {
+      Mesh = _GrassMesh
+    };
+
   }
 }
