@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Godot;
 
 public class Chunk : Spatial
@@ -55,6 +57,7 @@ public class Chunk : Spatial
     surfaceTool.CreateFrom(arrayPlane, 0);
     surfaceTool.GenerateNormals();
 
+
     var meshInstance = new MeshInstance()
     {
       Mesh = surfaceTool.Commit()
@@ -64,11 +67,110 @@ public class Chunk : Spatial
     meshInstance.CreateTrimeshCollision();
     AddChild(meshInstance);
 
-    //Next Need to take multimesh and for each item in mesh align to ground of chunk
-    var mm = new MultiMesh
+    ArrayMesh a = (ArrayMesh)meshInstance.Mesh;
+
+
+
+    //Decorate MULTIMESH
+  }
+
+  public void PopulateGrass(MeshInstance targetSurface)
+  {
+    //https://github.com/godotengine/godot/blob/master/editor/plugins/multimesh_editor_plugin.cpp
+    Transform geoXform = GlobalTransform.AffineInverse() * targetSurface.GlobalTransform;
+    var faceVertices = targetSurface.Mesh.GetFaces();
+    var mesh = targetSurface.Mesh;
+
+
+    //No faces so exit
+    if (faceVertices.Length == 0) return;
+
+    var faces = new Vector3[faceVertices.Length / 3, 3];
+
+    for (int i = 0; i < faceVertices.Length; i++)
     {
-      Mesh = _GrassMesh
-    };
+      for (int j = 0; j < 3; j++)
+      {
+        faces[i, j] = faceVertices[i * 3 + j];
+      }
+    }
+
+
+
+
+    for (int i = 0; i < faces.Length; i++)
+    {
+      for (int j = 0; j < 3; j++)
+      {
+        faces[i, j] = geoXform.Xform(faces[i, j]);
+      }
+    }
+
+    float areaAccumulation = 0;
+    Dictionary<float, int> triangleAreaMap = new Dictionary<float, int>();
+
+    for (int i = 0; i < faces.Length; i++)
+    {
+      float area = CalculateTriangleArea(faces[i, 0], faces[i, 1], faces[i, 2]);
+
+      if (area < Mathf.Epsilon) continue;
+      triangleAreaMap.Add(areaAccumulation, i);
+      areaAccumulation += area;
+    }
+
+    if (triangleAreaMap.Count == 0 || areaAccumulation == 0) return;
+
+    var multimesh = new MultiMesh();
+    multimesh.Mesh = mesh;
+
+
+    int instanceCount = 100;
+    float tiltRandom = 25;
+    float rotateRandom = 25;
+    float scaleRandom = 25;
+
+    int axis = 0;
+
+    bool xAxis = false;
+
+    Transform axisXform = new Transform();
+    if (xAxis)
+    {
+      axisXform.Rotated(new Vector3(1, 0, 0), -Mathf.Pi * 0.5f);
+    }
+    else
+    {
+      axisXform.Rotated(new Vector3(0, 0, 1), -Mathf.Pi * 0.5f);
+    }
+
+    RandomNumberGenerator rng = new RandomNumberGenerator();
+
+    for (int i = 0; i < instanceCount; i++)
+    {
+      float areapos = rng.Randf() * areaAccumulation;
+
+      //Find closest value
+      var closest = triangleAreaMap.OrderBy(e => Mathf.Abs(e.Key - areapos)).FirstOrDefault();
+
+
+
+    }
+
+
+
+
 
   }
+
+  // Calculate the area of a triangle give the 3 vertices
+  public float CalculateTriangleArea(Vector3 v1, Vector3 v2, Vector3 v3)
+  {
+    float a = v1.DistanceTo(v2);
+    float b = v2.DistanceTo(v3);
+    float c = v3.DistanceTo(v1);
+    float s = (a + b + c) / 2;
+    return Mathf.Sqrt(s * (s - a) * (s - b) * (s - c));
+  }
+
+
 }
