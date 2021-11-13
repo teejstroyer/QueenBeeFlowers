@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
@@ -11,7 +12,6 @@ public class Chunk : Spatial
   private readonly int _MaxHeight;
   private readonly Material _Material;
   private readonly Mesh _GrassMesh;
-
 
   public Chunk(OpenSimplexNoise noise, Vector3 position, int maxHeight, int chunkSize, int subdivisions, Material material, Mesh grassMesh)
   {
@@ -67,11 +67,8 @@ public class Chunk : Spatial
     meshInstance.CreateTrimeshCollision();
     AddChild(meshInstance);
 
-    ArrayMesh a = (ArrayMesh)meshInstance.Mesh;
-
-
-
     //Decorate MULTIMESH
+    PopulateGrass(meshInstance);
   }
 
   public void PopulateGrass(MeshInstance targetSurface)
@@ -79,31 +76,21 @@ public class Chunk : Spatial
     //https://github.com/godotengine/godot/blob/master/editor/plugins/multimesh_editor_plugin.cpp
     Transform geoXform = GlobalTransform.AffineInverse() * targetSurface.GlobalTransform;
     var faceVertices = targetSurface.Mesh.GetFaces();
-    var mesh = targetSurface.Mesh;
 
-
-    //No faces so exit
+    var mesh = _GrassMesh;
     if (faceVertices.Length == 0) return;
-
-    var faces = new Vector3[faceVertices.Length / 3, 3];
-
-    for (int i = 0; i < faceVertices.Length; i++)
-    {
-      for (int j = 0; j < 3; j++)
-      {
-        faces[i, j] = faceVertices[i * 3 + j];
-      }
-    }
-
-
-
+    var faces = new Triangle[faceVertices.Length / 3];
 
     for (int i = 0; i < faces.Length; i++)
     {
-      for (int j = 0; j < 3; j++)
-      {
-        faces[i, j] = geoXform.Xform(faces[i, j]);
-      }
+      faces[i] = new Triangle(faceVertices[3 * i], faceVertices[3 * i + 1], faceVertices[3 * i + 2]);
+    }
+
+    foreach (var face in faces)
+    {
+      face[0] = geoXform.Xform(face[0]);
+      face[1] = geoXform.Xform(face[1]);
+      face[2] = geoXform.Xform(face[2]);
     }
 
     float areaAccumulation = 0;
@@ -111,8 +98,7 @@ public class Chunk : Spatial
 
     for (int i = 0; i < faces.Length; i++)
     {
-      float area = CalculateTriangleArea(faces[i, 0], faces[i, 1], faces[i, 2]);
-
+      float area = faces[i].Area;
       if (area < Mathf.Epsilon) continue;
       triangleAreaMap.Add(areaAccumulation, i);
       areaAccumulation += area;
@@ -120,57 +106,56 @@ public class Chunk : Spatial
 
     if (triangleAreaMap.Count == 0 || areaAccumulation == 0) return;
 
-    var multimesh = new MultiMesh();
-    multimesh.Mesh = mesh;
 
-
-    int instanceCount = 100;
+    int instanceCount = 1000;
     float tiltRandom = 25;
     float rotateRandom = 25;
     float scaleRandom = 25;
-
-    int axis = 0;
-
     bool xAxis = false;
+
+    var multimesh = new MultiMesh
+    {
+      Mesh = mesh,
+      TransformFormat = MultiMesh.TransformFormatEnum.Transform3d,
+      InstanceCount = instanceCount,
+      //ColorFormat = MultiMesh.ColorFormatEnum.None
+    };
 
     Transform axisXform = new Transform();
     if (xAxis)
-    {
       axisXform.Rotated(new Vector3(1, 0, 0), -Mathf.Pi * 0.5f);
-    }
     else
-    {
       axisXform.Rotated(new Vector3(0, 0, 1), -Mathf.Pi * 0.5f);
-    }
 
     RandomNumberGenerator rng = new RandomNumberGenerator();
 
     for (int i = 0; i < instanceCount; i++)
     {
       float areapos = rng.Randf() * areaAccumulation;
-
       //Find closest value
       var closest = triangleAreaMap.OrderBy(e => Mathf.Abs(e.Key - areapos)).FirstOrDefault();
+      var face = faces[closest.Value];
+      var pos = face.GetRandomPoint();
+      var normal = face.Normal;
+      var opAxis = (face[0] - face[1]).Normalized();
 
+      Transform xform = new Transform();
+      xform.SetLookAt(pos, pos + opAxis, normal);
+      xform *= axisXform;
 
-
+      var postXform = new Basis();
+      postXform.Rotated(xform.basis[1], rng.Randf() * rotateRandom * Mathf.Pi);
+      postXform.Rotated(xform.basis[2], rng.Randf() * tiltRandom * Mathf.Pi);
+      postXform.Rotated(xform.basis[0], rng.Randf() * tiltRandom * Mathf.Pi);
+      xform.basis = postXform * xform.basis;
+      xform.basis.Scale = new Vector3(1, 1, 1) * (rng.Randf() * scaleRandom + 100);
+      multimesh.SetInstanceTransform(i, xform);
     }
-
-
-
-
-
+    var mmi = new MultiMeshInstance()
+    {
+      Multimesh = multimesh,
+    };
+    AddChild(mmi);
   }
-
-  // Calculate the area of a triangle give the 3 vertices
-  public float CalculateTriangleArea(Vector3 v1, Vector3 v2, Vector3 v3)
-  {
-    float a = v1.DistanceTo(v2);
-    float b = v2.DistanceTo(v3);
-    float c = v3.DistanceTo(v1);
-    float s = (a + b + c) / 2;
-    return Mathf.Sqrt(s * (s - a) * (s - b) * (s - c));
-  }
-
 
 }
