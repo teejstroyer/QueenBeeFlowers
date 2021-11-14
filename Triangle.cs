@@ -59,4 +59,11 @@ public class Triangle
       return normal.Normalized();
     }
   }
+
+  public bool ContainsXZ(float x, float z)
+  {
+    float y = CalculateY(x, z);
+    return y >= _Vertices[0].y && y >= _Vertices[1].y && y >= _Vertices[2].y;
+  }
+
 }

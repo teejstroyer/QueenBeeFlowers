@@ -12,8 +12,9 @@ public class Chunk : Spatial
   private readonly int _MaxHeight;
   private readonly Material _Material;
   private readonly Mesh _GrassMesh;
+  private readonly int _GrassCount;
 
-  public Chunk(OpenSimplexNoise noise, Vector3 position, int maxHeight, int chunkSize, int subdivisions, Material material, Mesh grassMesh)
+  public Chunk(OpenSimplexNoise noise, Vector3 position, int maxHeight, int chunkSize, int subdivisions, Material material, Mesh grassMesh, int grassCount)
   {
     this.Translation = position;
     _Noise = noise;
@@ -22,6 +23,7 @@ public class Chunk : Spatial
     _MaxHeight = maxHeight;
     _Material = material;
     _GrassMesh = grassMesh;
+    _GrassCount = grassCount;
   }
 
   public override void _Ready()
@@ -68,93 +70,50 @@ public class Chunk : Spatial
     AddChild(meshInstance);
 
     //Decorate MULTIMESH
-    PopulateGrass(meshInstance);
+    GenerateGrass(meshInstance);
   }
 
-  public void PopulateGrass(MeshInstance targetSurface)
+  public void GenerateGrass(MeshInstance targetSurface)
   {
-    //https://github.com/godotengine/godot/blob/master/editor/plugins/multimesh_editor_plugin.cpp
-    Transform geoXform = GlobalTransform.AffineInverse() * targetSurface.GlobalTransform;
-    var faceVertices = targetSurface.Mesh.GetFaces();
-
-    var mesh = _GrassMesh;
-    if (faceVertices.Length == 0) return;
-    var faces = new Triangle[faceVertices.Length / 3];
-
-    for (int i = 0; i < faces.Length; i++)
-    {
-      faces[i] = new Triangle(faceVertices[3 * i], faceVertices[3 * i + 1], faceVertices[3 * i + 2]);
-    }
-
-    foreach (var face in faces)
-    {
-      face[0] = geoXform.Xform(face[0]);
-      face[1] = geoXform.Xform(face[1]);
-      face[2] = geoXform.Xform(face[2]);
-    }
-
-    float areaAccumulation = 0;
-    Dictionary<float, int> triangleAreaMap = new Dictionary<float, int>();
-
-    for (int i = 0; i < faces.Length; i++)
-    {
-      float area = faces[i].Area;
-      if (area < Mathf.Epsilon) continue;
-      triangleAreaMap.Add(areaAccumulation, i);
-      areaAccumulation += area;
-    }
-
-    if (triangleAreaMap.Count == 0 || areaAccumulation == 0) return;
-
-
-    int instanceCount = 1000;
-    float tiltRandom = 25;
-    float rotateRandom = 25;
-    float scaleRandom = 25;
-    bool xAxis = false;
+    var vertices = targetSurface.Mesh.GetFaces();
+    var faces = vertices.ToTriangleArray();
+    int instanceCount = (_GrassCount / faces.Length) * faces.Length;
 
     var multimesh = new MultiMesh
     {
-      Mesh = mesh,
+      Mesh = _GrassMesh,
       TransformFormat = MultiMesh.TransformFormatEnum.Transform3d,
       InstanceCount = instanceCount,
-      //ColorFormat = MultiMesh.ColorFormatEnum.None
     };
 
-    Transform axisXform = new Transform();
-    if (xAxis)
-      axisXform.Rotated(new Vector3(1, 0, 0), -Mathf.Pi * 0.5f);
-    else
-      axisXform.Rotated(new Vector3(0, 0, 1), -Mathf.Pi * 0.5f);
-
-    RandomNumberGenerator rng = new RandomNumberGenerator();
-
-    for (int i = 0; i < instanceCount; i++)
+    var blade = 0;
+    foreach (var face in faces)
     {
-      float areapos = rng.Randf() * areaAccumulation;
-      //Find closest value
-      var closest = triangleAreaMap.OrderBy(e => Mathf.Abs(e.Key - areapos)).FirstOrDefault();
-      var face = faces[closest.Value];
-      var pos = face.GetRandomPoint();
-      var normal = face.Normal;
-      var opAxis = (face[0] - face[1]).Normalized();
-
-      Transform xform = new Transform();
-      xform.SetLookAt(pos, pos + opAxis, normal);
-      xform *= axisXform;
-
-      var postXform = new Basis();
-      postXform.Rotated(xform.basis[1], rng.Randf() * rotateRandom * Mathf.Pi);
-      postXform.Rotated(xform.basis[2], rng.Randf() * tiltRandom * Mathf.Pi);
-      postXform.Rotated(xform.basis[0], rng.Randf() * tiltRandom * Mathf.Pi);
-      xform.basis = postXform * xform.basis;
-      xform.basis.Scale = new Vector3(1, 1, 1) * (rng.Randf() * scaleRandom + 100);
-      multimesh.SetInstanceTransform(i, xform);
+      for (int i = 0; i < (instanceCount / faces.Length); i++)
+      {
+        var pos = face.GetRandomPoint();
+        var opAxis = (face[0] - face[1]).Normalized();
+        Transform xform = new Transform();
+        xform.SetLookAt(pos, pos + opAxis, Vector3.Up);
+        xform.basis.Scale = new Vector3(1, 1, 1);
+        multimesh.SetInstanceTransform(blade, xform);
+        blade++;
+      }
     }
-    var mmi = new MultiMeshInstance()
+
+    //Get Strays not caught by previous loop
+    while (blade != instanceCount)
     {
-      Multimesh = multimesh,
-    };
+      var face = faces[0];
+      var pos = face.GetRandomPoint();
+      var opAxis = (face[0] - face[1]).Normalized();
+      Transform xform = new Transform();
+      xform.SetLookAt(pos, pos + opAxis, Vector3.Up);
+      xform.basis.Scale = new Vector3(1, 1, 1);
+      multimesh.SetInstanceTransform(blade++, xform);
+    }
+
+    var mmi = new MultiMeshInstance() { Multimesh = multimesh };
     AddChild(mmi);
   }
 

@@ -19,6 +19,7 @@ public class TerrainGenerator : Spatial
   [Export] public int ChunkSubdivisions = 1;
   [Export] public Material GrassMaterial;
   [Export] public Mesh BladeOfGrass;
+  [Export] public int GrassCount = 2000;
 
   private Vector3 FollowPosition;
   private readonly Dictionary<string, Chunk> _Chunks = new Dictionary<string, Chunk>();
@@ -57,7 +58,7 @@ public class TerrainGenerator : Spatial
       _Chunks[position.ToKey()].ShouldRemove = false;
       return;
     }
-    var chunk = new Chunk(Noise, position, ChunkMaxHeight, ChunkSize, ChunkSubdivisions, GrassMaterial, BladeOfGrass)
+    var chunk = new Chunk(Noise, position, ChunkMaxHeight, ChunkSize, ChunkSubdivisions, GrassMaterial, BladeOfGrass, GrassCount)
     {
       ShouldRemove = false
     };
