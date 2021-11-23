@@ -17,13 +17,21 @@ public class TerrainGenerator : Spatial
   [Export] public int ChunkMaxHeight = 20;
   [Export] public int ChunkSize = 4;
   [Export] public int ChunkSubdivisions = 1;
+  [Export] public Material GroundMaterial;
+  [Export] public int GrassCountPerTriangle = 50;
   [Export] public Material GrassMaterial;
   [Export] public Mesh BladeOfGrass;
-  [Export] public int GrassCount = 2000;
 
   private Vector3 FollowPosition;
   private readonly Dictionary<string, Chunk> _Chunks = new Dictionary<string, Chunk>();
-  public void OnPlayerEmitPosition(Vector3 position) => FollowPosition = position;
+  public void OnPlayerEmitPosition(Vector3 position)
+  {
+    FollowPosition = position;
+    foreach (var chunk in _Chunks.Values)
+    {
+      chunk.SetPlayerPosition(position);
+    }
+  }
 
   public override void _Process(float delta) => UpdateChunks();
   private void UpdateChunks()
@@ -58,7 +66,7 @@ public class TerrainGenerator : Spatial
       _Chunks[position.ToKey()].ShouldRemove = false;
       return;
     }
-    var chunk = new Chunk(Noise, position, ChunkMaxHeight, ChunkSize, ChunkSubdivisions, GrassMaterial, BladeOfGrass, GrassCount)
+    var chunk = new Chunk(Noise, position, ChunkMaxHeight, ChunkSize, ChunkSubdivisions, GroundMaterial, GrassMaterial, BladeOfGrass, GrassCountPerTriangle)
     {
       ShouldRemove = false
     };
